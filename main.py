@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 import io
+from PIL import ImageOps
 
 app = FastAPI()
 
@@ -35,7 +36,7 @@ async def predict(file: UploadFile = File(...)):
     # 3. Invert colors: If your background is white and digit is black, 
     # MNIST requires white digits on black background.
     # Note: If your image already has black background, comment this out.
-    from PIL import ImageOps
+
     img = ImageOps.invert(img)
     
     # 4. Resize and convert to array
