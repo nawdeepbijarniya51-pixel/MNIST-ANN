@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MNIST Digit Recognizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #0a0a0f;
+      color: #e8e6f0;
+      min-height: 100vh;
+      padding: 40px 24px 60px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .header-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: #6c63ff;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .header-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #f0eeff;
+      letter-spacing: -0.5px;
+    }
+
+    .header-sub {
+      font-size: 13px;
+      color: #6b6880;
+      margin-top: 6px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      max-width: 740px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 620px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: #12111a;
+      border: 0.5px solid #2a2740;
+      border-radius: 14px;
+      padding: 22px;
+    }
+
+    .panel-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #4a4663;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 1.5px dashed #2d2a45;
+      border-radius: 10px;
+      height: 220px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: #6c63ff;
+      background: #18163a;
+    }
+
+    .drop-zone.has-image {
+      border-style: solid;
+      border-color: #2d2a45;
+    }
+
+    .drop-icon {
+      font-size: 34px;
+      margin-bottom: 10px;
+      opacity: 0.35;
+    }
+
+    .drop-text {
+      font-size: 13px;
+      color: #5a5575;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    .drop-text strong { color: #8b82ff; font-weight: 500; }
+
+    .drop-text small {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      color: #38344a;
+    }
+
+    #preview-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+      padding: 14px;
+      display: none;
+    }
+
+    .preview-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 6px 10px;
+      background: rgba(10, 10, 15, 0.88);
+      font-size: 11px;
+      color: #5a5575;
+      text-align: center;
+      display: none;
+    }
+
+    /* ── Buttons ── */
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    button {
+      flex: 1;
+      padding: 9px 14px;
+      border-radius: 8px;
+      border: 0.5px solid #2d2a45;
+      background: transparent;
+      color: #a09bc0;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    button:hover {
+      background: #1c1a2e;
+      border-color: #4a4663;
+      color: #e8e6f0;
+    }
+
+    button.primary {
+      background: #6c63ff;
+      border-color: #6c63ff;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    button.primary:hover { background: #7c74ff; border-color: #7c74ff; }
+
+    button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    button:disabled:hover {
+      background: transparent;
+      border-color: #2d2a45;
+      color: #a09bc0;
+    }
+
+    button.primary:disabled:hover {
+      background: #6c63ff;
+      border-color: #6c63ff;
+    }
+
+    #file-input { display: none; }
+
+    /* ── Status chip ── */
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: #1c1a2e;
+      border: 0.5px solid #2d2a45;
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: #5a5575;
+      margin-top: 14px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2d2a45;
+      flex-shrink: 0;
+    }
+
+    .dot.active {
+      background: #6c63ff;
+      box-shadow: 0 0 6px rgba(108, 99, 255, 0.7);
+    }
+
+    .dot.loading {
+      background: #6c63ff;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .loader-ring {
+      display: none;
+      width: 13px;
+      height: 13px;
+      border: 2px solid #2d2a45;
+      border-top-color: #6c63ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .loader-ring.active { display: block; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    .error-msg {
+      background: #1e0f0f;
+      border: 0.5px solid #5a1a1a;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #e07070;
+      margin-top: 12px;
+      display: none;
+      line-height: 1.5;
+    }
+
+    /* ── Result panel ── */
+    .prediction-display {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: #0e0d18;
+      border-radius: 10px;
+      border: 0.5px solid #2a2740;
+    }
+
+    .big-digit {
+      font-family: 'Space Mono', monospace;
+      font-size: 66px;
+      font-weight: 700;
+      color: #6c63ff;
+      line-height: 1;
+      min-width: 72px;
+      text-align: center;
+      text-shadow: 0 0 30px rgba(108, 99, 255, 0.35);
+      transition: all 0.3s;
+    }
+
+    .big-digit.placeholder {
+      color: #2d2a45;
+      text-shadow: none;
+    }
+
+    .prediction-meta { flex: 1; min-width: 0; }
+
+    .confidence-pct {
+      font-size: 22px;
+      font-weight: 600;
+      color: #f0eeff;
+      margin-bottom: 2px;
+    }
+
+    .confidence-pct.placeholder {
+      color: #2d2a45;
+      font-size: 13px;
+      font-weight: 400;
+    }
+
+    .confidence-label {
+      font-size: 11px;
+      color: #4a4663;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      display: none;
+    }
+
+    .conf-bar-wrap {
+      height: 3px;
+      background: #1c1a2e;
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .conf-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #6c63ff, #a099ff);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Probability bars ── */
+    .probs-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #4a4663;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .prob-rows { display: flex; flex-direction: column; gap: 7px; }
+
+    .prob-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .prob-digit {
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      min-width: 16px;
+      text-align: center;
+      color: #4a4663;
+      transition: color 0.3s;
+    }
+
+    .prob-digit.top { color: #6c63ff; }
+
+    .prob-track {
+      flex: 1;
+      height: 6px;
+      background: #1c1a2e;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .prob-fill {
+      height: 100%;
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+      background: #2d2a45;
+    }
+
+    .prob-fill.top { background: linear-gradient(90deg, #6c63ff, #a099ff); }
+
+    .prob-pct {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      min-width: 48px;
+      text-align: right;
+      color: #4a4663;
+      transition: color 0.3s;
+    }
+
+    .prob-pct.top { color: #a099ff; }
+
+    /* ── Footer ── */
+    .info-note {
+      font-size: 11px;
+      color: #38344a;
+      text-align: center;
+      margin-top: 28px;
+      line-height: 1.7;
+      max-width: 740px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .info-note code {
+      font-family: 'Space Mono', monospace;
+      color: #4a4663;
+      background: #12111a;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-label">Deep Learning · MNIST</div>
+    <div class="header-title">Digit Recognizer</div>
+    <div class="header-sub">Drop a handwritten digit image — get instant prediction</div>
+  </div>
+
+  <div class="layout">
+
+    <!-- LEFT: Input panel -->
+    <div class="panel">
+      <div class="panel-label">Input</div>
+
+      <div class="drop-zone" id="drop-zone">
+        <div id="drop-content">
+          <div class="drop-icon">✦</div>
+          <div class="drop-text">
+            <strong>Drop image here</strong><br>
+            or click to browse
+            <small>PNG / JPG / GIF</small>
+          </div>
+        </div>
+        <img id="preview-img" alt="uploaded digit" />
+        <div class="preview-overlay" id="preview-overlay">click to change image</div>
+      </div>
+
+      <input type="file" id="file-input" accept="image/*" />
+
+      <div class="controls">
+        <button id="clear-btn">Clear</button>
+        <button class="primary" id="predict-btn" disabled>Predict →</button>
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <div class="status-chip">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text">Waiting for image</span>
+        <div class="loader-ring" id="loader"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Result panel -->
+    <div class="panel">
+      <div class="panel-label">Result</div>
+
+      <div class="prediction-display">
+        <div class="big-digit placeholder" id="big-digit">?</div>
+        <div class="prediction-meta">
+          <div class="confidence-pct placeholder" id="conf-pct">Drop an image to start</div>
+          <div class="confidence-label" id="conf-label">confidence</div>
+          <div class="conf-bar-wrap" id="conf-bar-wrap">
+            <div class="conf-bar" id="conf-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="probs-label">All probabilities</div>
+      <div class="prob-rows" id="prob-rows"></div>
+    </div>
+
+  </div>
+
+  <div class="info-note">
+    powered by self hosted MNIST ANN model.
+  </div>
+
+  <script>
+    // ── DOM refs ─────────────────────────────────────────────────────────
+    const dropZone     = document.getElementById('drop-zone');
+    const fileInput    = document.getElementById('file-input');
+    const previewImg   = document.getElementById('preview-img');
+    const previewOverlay = document.getElementById('preview-overlay');
+    const dropContent  = document.getElementById('drop-content');
+    const predictBtn   = document.getElementById('predict-btn');
+    const clearBtn     = document.getElementById('clear-btn');
+    const bigDigit     = document.getElementById('big-digit');
+    const confPct      = document.getElementById('conf-pct');
+    const confLabel    = document.getElementById('conf-label');
+    const confBarWrap  = document.getElementById('conf-bar-wrap');
+    const confBar      = document.getElementById('conf-bar');
+    const probRows     = document.getElementById('prob-rows');
+    const statusDot    = document.getElementById('status-dot');
+    const statusText   = document.getElementById('status-text');
+    const loader       = document.getElementById('loader');
+    const errorMsg     = document.getElementById('error-msg');
+
+    let currentImage = null;
+    let isLoading = false;
+
+    // ── Build probability rows ───────────────────────────────────────────
+    function initRows() {
+      probRows.innerHTML = '';
+      for (let i = 0; i <= 9; i++) {
+        const row = document.createElement('div');
+        row.className = 'prob-row';
+        row.innerHTML = `
+          <div class="prob-digit" id="lbl-${i}">${i}</div>
+          <div class="prob-track"><div class="prob-fill" id="fill-${i}"></div></div>
+          <div class="prob-pct" id="pct-${i}">—</div>
+        `;
+        probRows.appendChild(row);
+      }
+    }
+    initRows();
+
+    // ── Status helper ────────────────────────────────────────────────────
+    function setStatus(type, text) {
+      statusText.textContent = text;
+      statusDot.className = 'dot';
+      loader.className = 'loader-ring';
+      if (type === 'active')  statusDot.classList.add('active');
+      if (type === 'loading') { statusDot.classList.add('loading'); loader.classList.add('active'); }
+    }
+
+    // ── Reset result panel ───────────────────────────────────────────────
+    function resetResult() {
+      bigDigit.textContent = '?';
+      bigDigit.className = 'big-digit placeholder';
+      confPct.textContent = 'Drop an image to start';
+      confPct.className = 'confidence-pct placeholder';
+      confLabel.style.display = 'none';
+      confBarWrap.style.display = 'none';
+      confBar.style.width = '0%';
+      for (let i = 0; i <= 9; i++) {
+        document.getElementById(`fill-${i}`).style.width = '0%';
+        document.getElementById(`fill-${i}`).className = 'prob-fill';
+        document.getElementById(`pct-${i}`).textContent = '—';
+        document.getElementById(`pct-${i}`).className = 'prob-pct';
+        document.getElementById(`lbl-${i}`).className = 'prob-digit';
+      }
+    }
+
+    // ── Image loading ────────────────────────────────────────────────────
+    function loadImage(file) {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        currentImage = e.target.result;
+        previewImg.src = currentImage;
+        previewImg.style.display = 'block';
+        previewOverlay.style.display = 'block';
+        dropContent.style.display = 'none';
+        dropZone.classList.add('has-image');
+        predictBtn.disabled = false;
+        errorMsg.style.display = 'none';
+        setStatus('active', 'Image loaded — ready to predict');
+        resetResult();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── Drag & drop ──────────────────────────────────────────────────────
+    dropZone.addEventListener('click', () => { if (!isLoading) fileInput.click(); });
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadImage(fileInput.files[0]); });
+
+    // ── Clear ────────────────────────────────────────────────────────────
+    clearBtn.addEventListener('click', () => {
+      currentImage = null;
+      previewImg.style.display = 'none';
+      previewOverlay.style.display = 'none';
+      dropContent.style.display = '';
+      dropZone.classList.remove('has-image');
+      predictBtn.disabled = true;
+      fileInput.value = '';
+      errorMsg.style.display = 'none';
+      setStatus('idle', 'Waiting for image');
+      resetResult();
+    });
+
+    // ── Render result ────────────────────────────────────────────────────
+    function renderResult(digit, probs) {
+      const topProb = probs[digit];
+
+      bigDigit.textContent = digit;
+      bigDigit.className = 'big-digit';
+
+      confPct.textContent = (topProb * 100).toFixed(1) + '%';
+      confPct.className = 'confidence-pct';
+      confLabel.style.display = 'block';
+      confBarWrap.style.display = 'block';
+
+      setTimeout(() => {
+        confBar.style.width = (topProb * 100).toFixed(1) + '%';
+      }, 50);
+
+      const maxProb = Math.max(...probs);
+      probs.forEach((p, i) => {
+        const isTop = (i === digit);
+        document.getElementById(`fill-${i}`).className = 'prob-fill' + (isTop ? ' top' : '');
+        document.getElementById(`pct-${i}`).className  = 'prob-pct'  + (isTop ? ' top' : '');
+        document.getElementById(`lbl-${i}`).className  = 'prob-digit' + (isTop ? ' top' : '');
+        document.getElementById(`pct-${i}`).textContent = (p * 100).toFixed(1) + '%';
+        setTimeout(() => {
+          document.getElementById(`fill-${i}`).style.width =
+            (maxProb > 0 ? (p / maxProb * 100) : 0).toFixed(1) + '%';
+        }, 80 + i * 40);
+      });
+
+      setStatus('active', `Predicted: digit ${digit} · ${(topProb * 100).toFixed(1)}% confidence`);
+    }
+
+    // ── Predict (Anthropic API) ──────────────────────────────────────────
+    async function predictDigit() {
+  if (!currentImage || isLoading) return;
+  isLoading = true;
+  predictBtn.disabled = true;
+  setStatus('loading', 'Running inference…');
+  errorMsg.style.display = 'none';
+
+  // Convert base64 back to a File object
+  const res_b64 = await fetch(currentImage);
+  const blob = await res_b64.blob();
+  const formData = new FormData();
+  formData.append('file', blob, 'digit.png');
+
+  try {
+    const res = await fetch('http://127.0.0.1:8000/predict', {  // change to your live URL later
+      method: 'POST',
+      body: formData
+    });
+    const result = await res.json();
+    renderResult(result.predicted_digit, result.probabilities);
+  } catch (err) {
+    errorMsg.textContent = `Error: ${err.message}`;
+    errorMsg.style.display = 'block';
+    setStatus('idle', 'Prediction failed — try again');
+  }
+
+  isLoading = false;
+  predictBtn.disabled = false;
+}
+
+    predictBtn.addEventListener('click', predictDigit);
+  </script>
+
+</body>
+</html>
