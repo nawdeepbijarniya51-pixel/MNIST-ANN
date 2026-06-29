@@ -24,12 +24,28 @@ def root():
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     contents = await file.read()
+    # 1. Open and convert to grayscale
     img = Image.open(io.BytesIO(contents)).convert("L")
+    
+    # 2. Thresholding: Make it strictly binary (0 or 255)
+    # This helps remove "gray" noise and shadows
+    threshold = 127
+    img = img.point(lambda p: 255 if p > threshold else 0)
+    
+    # 3. Invert colors: If your background is white and digit is black, 
+    # MNIST requires white digits on black background.
+    # Note: If your image already has black background, comment this out.
+    from PIL import ImageOps
+    img = ImageOps.invert(img)
+    
+    # 4. Resize and convert to array
     img = img.resize((28, 28))
     img_array = np.array(img) / 255.0
     img_array = img_array.reshape(1, 28, 28, 1)
+    
     probs = model.predict(img_array)[0].tolist()
     predicted_digit = int(np.argmax(probs))
+    
     return {
         "predicted_digit": predicted_digit,
         "probabilities": probs
