@@ -581,6 +581,23 @@
     // frames are always drawn to canvas exactly as the sensor saw them, so
     // digits never come out backwards.
     async function startCamera() {
+      // Explicit upfront checks so failures are clear instead of a silently
+      // hidden Capture button. getUserMedia requires a secure context
+      // (https:// or http://localhost) — it will not work at all when the
+      // page is opened directly as a file:// path, and on plain http:// on
+      // most browsers.
+      if (!window.isSecureContext) {
+        errorMsg.textContent = 'Camera requires a secure context (HTTPS or localhost). Opening this file directly (file://) or over plain HTTP blocks camera access — host it on HTTPS or run it via localhost.';
+        errorMsg.style.display = 'block';
+        setStatus('idle', 'Camera blocked — insecure context');
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        errorMsg.textContent = 'Camera API is not available in this browser/context.';
+        errorMsg.style.display = 'block';
+        setStatus('idle', 'Camera unavailable');
+        return;
+      }
       try {
         if (videoStream) {
           videoStream.getTracks().forEach(t => t.stop());
@@ -600,7 +617,17 @@
         camSourceLabel.textContent = facingMode === 'environment' ? 'Back' : 'Front';
         setStatus('active', 'Camera live — centre digit in box');
       } catch (err) {
-        errorMsg.textContent = 'Camera access denied or unavailable. Please allow camera permission and try again.';
+        let msg = 'Camera access failed. Please allow camera permission and try again.';
+        if (err.name === 'NotAllowedError') {
+          msg = 'Camera permission was denied. Check your browser/site settings and allow camera access, then retry.';
+        } else if (err.name === 'NotFoundError') {
+          msg = 'No camera was found on this device.';
+        } else if (err.name === 'NotReadableError') {
+          msg = 'Camera is already in use by another app. Close it and try again.';
+        } else if (err.name === 'OverconstrainedError') {
+          msg = 'Requested camera (front/back) is not available on this device. Try flipping camera.';
+        }
+        errorMsg.textContent = msg;
         errorMsg.style.display = 'block';
         setStatus('idle', 'Camera unavailable');
       }
