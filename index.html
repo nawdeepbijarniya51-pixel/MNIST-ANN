@@ -637,7 +637,7 @@
   formData.append('file', blob, 'digit.png');
 
   try {
-    const res = await fetch('http://127.0.0.1:8000/predict', {  // change to your live URL later
+    const res = await fetch('https://mnist-ann.onrender.com/predict', {  // change to your live URL later
       method: 'POST',
       body: formData
     });
