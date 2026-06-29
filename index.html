@@ -133,8 +133,11 @@
     #camera-video {
       width: 100%; height: 100%;
       object-fit: cover;
-      transform: scaleX(-1); /* mirror */
+      /* No CSS mirroring here — mirroring is applied conditionally via JS
+         only when the front-facing camera is in use. Back camera stays
+         unmirrored so digits read correctly, left-to-right, as captured. */
     }
+    #camera-video.mirrored { transform: scaleX(-1); }
 
     #camera-canvas { display: none; }
 
@@ -179,6 +182,25 @@
       text-align: center; line-height: 1.6;
     }
     .cam-start-msg strong { color: #8b82ff; }
+
+    /* camera source toggle (front/back) */
+    .cam-source-toggle {
+      position: absolute;
+      top: 8px; right: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(10,10,15,0.75);
+      border: 0.5px solid #2d2a45;
+      border-radius: 20px;
+      padding: 5px 10px;
+      font-size: 11px;
+      color: #a09bc0;
+      cursor: pointer;
+      z-index: 2;
+    }
+    .cam-source-toggle:hover { border-color: #6c63ff; color: #e8e6f0; }
+    .cam-source-toggle svg { width: 13px; height: 13px; }
 
     /* snap flash animation */
     @keyframes flash {
@@ -358,8 +380,13 @@
             <div class="drop-icon">📷</div>
             <div class="cam-start-msg">
               <strong>Click below to start camera</strong><br>
-              <small style="color:#38344a">Hold digit inside the box and snap</small>
+              <small style="color:#38344a">Hold digit inside the box, then tap Snap</small>
             </div>
+          </div>
+          <!-- Front/back camera toggle (shown only while live) -->
+          <div class="cam-source-toggle" id="cam-source-toggle" style="display:none" onclick="flipCamera()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            <span id="cam-source-label">Flip</span>
           </div>
           <!-- Live video -->
           <video id="camera-video" autoplay playsinline style="display:none"></video>
@@ -418,6 +445,7 @@
     let isLoading = false;
     let videoStream = null;
     let activeTab = 'upload';
+    let facingMode = 'environment'; // back camera by default — correct for shooting paper/digits
 
     // ── DOM refs ─────────────────────────────────────────────────────────
     const dropZone       = document.getElementById('drop-zone');
@@ -449,6 +477,8 @@
     const crosshair      = document.getElementById('crosshair');
     const cameraHint     = document.getElementById('camera-hint');
     const flashOverlay   = document.getElementById('flash-overlay');
+    const camSourceToggle= document.getElementById('cam-source-toggle');
+    const camSourceLabel = document.getElementById('cam-source-label');
 
     // ── Init prob rows ───────────────────────────────────────────────────
     function initRows() {
@@ -544,24 +574,41 @@
     });
 
     // ── Camera tab ───────────────────────────────────────────────────────
+    // Fix #1: the live preview is only mirrored when the FRONT camera is
+    // active (mirroring matches what users expect from a selfie cam). The
+    // BACK camera — the default and the practical choice for photographing
+    // a handwritten digit on paper — is shown unmirrored, and captured
+    // frames are always drawn to canvas exactly as the sensor saw them, so
+    // digits never come out backwards.
     async function startCamera() {
       try {
+        if (videoStream) {
+          videoStream.getTracks().forEach(t => t.stop());
+        }
         videoStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+          video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } }
         });
         video.srcObject = videoStream;
+        video.classList.toggle('mirrored', facingMode === 'user');
         video.style.display = 'block';
         camStartOverlay.style.display = 'none';
         crosshair.style.display = 'block';
         cameraHint.style.display = 'block';
         snapBtn.style.display = '';
         camOpenBtn.style.display = 'none';
+        camSourceToggle.style.display = 'flex';
+        camSourceLabel.textContent = facingMode === 'environment' ? 'Back' : 'Front';
         setStatus('active', 'Camera live — centre digit in box');
       } catch (err) {
-        errorMsg.textContent = 'Camera access denied. Please allow camera permission and try again.';
+        errorMsg.textContent = 'Camera access denied or unavailable. Please allow camera permission and try again.';
         errorMsg.style.display = 'block';
         setStatus('idle', 'Camera unavailable');
       }
+    }
+
+    function flipCamera() {
+      facingMode = facingMode === 'environment' ? 'user' : 'environment';
+      startCamera();
     }
 
     function stopCamera() {
@@ -572,6 +619,7 @@
       video.style.display = 'none';
       snapBtn.style.display = 'none';
       camOpenBtn.style.display = '';
+      camSourceToggle.style.display = 'none';
       crosshair.style.display = 'none';
       cameraHint.style.display = 'none';
       camPreview.style.display = 'none';
@@ -581,6 +629,10 @@
       currentImageBlob = null;
     }
 
+    // Fix #2: snapping a photo only ever captures the frame and shows a
+    // preview — it never auto-predicts. Predict is a separate, deliberate
+    // click on "Predict →", so the user can review (and retake) the shot
+    // before it's sent to the model.
     function snapPhoto() {
       if (!videoStream) return;
 
@@ -589,16 +641,22 @@
       void flashOverlay.offsetWidth; // reflow
       flashOverlay.classList.add('snap');
 
-      // Draw video frame to canvas
+      // Draw video frame to canvas exactly as captured by the sensor.
+      // Only undo the mirroring if we were displaying a mirrored
+      // (front-camera) preview — the back camera is drawn straight.
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.save();
-      ctx.scale(-1, 1); // un-mirror
-      ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+      if (facingMode === 'user') {
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+      } else {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
       ctx.restore();
 
-      // Convert to blob
+      // Convert to blob — capture only, no auto-predict.
       canvas.toBlob(blob => {
         currentImageBlob = blob;
         const url = URL.createObjectURL(blob);
@@ -609,8 +667,9 @@
         crosshair.style.display = 'none';
         cameraHint.style.display = 'none';
         snapBtn.style.display = 'none';
+        camSourceToggle.style.display = 'none';
         camPredictBtn.disabled = false;
-        setStatus('active', 'Photo captured — ready to predict');
+        setStatus('active', 'Photo captured — review, then tap Predict');
         resetResult();
       }, 'image/png');
     }
@@ -622,6 +681,7 @@
       crosshair.style.display = 'block';
       cameraHint.style.display = 'block';
       snapBtn.style.display = '';
+      camSourceToggle.style.display = 'flex';
       camPredictBtn.disabled = true;
       currentImageBlob = null;
       setStatus('active', 'Camera live — centre digit in box');
