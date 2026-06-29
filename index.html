@@ -183,24 +183,20 @@
     }
     .cam-start-msg strong { color: #8b82ff; }
 
-    /* camera source toggle (front/back) */
-    .cam-source-toggle {
-      position: absolute;
-      top: 8px; right: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(10,10,15,0.75);
-      border: 0.5px solid #2d2a45;
-      border-radius: 20px;
-      padding: 5px 10px;
-      font-size: 11px;
-      color: #a09bc0;
+    /* shown only once the live camera feed is active */
+    .cam-live-only { display: none; }
+    .cam-live-only.is-visible { display: flex; }
+    #snap-btn.cam-live-only.is-visible { display: block; }
+
+    .cam-flip-link {
+      text-align: center;
+      font-size: 12px;
+      color: #5a5575;
+      margin-top: 10px;
       cursor: pointer;
-      z-index: 2;
+      text-decoration: underline;
     }
-    .cam-source-toggle:hover { border-color: #6c63ff; color: #e8e6f0; }
-    .cam-source-toggle svg { width: 13px; height: 13px; }
+    .cam-flip-link:hover { color: #8b82ff; }
 
     /* snap flash animation */
     @keyframes flash {
@@ -255,7 +251,7 @@
     /* snap button */
     #snap-btn {
       background: #6c63ff; border-color: #6c63ff; color: #fff;
-      font-weight: 500; display: none;
+      font-weight: 500;
     }
     #snap-btn:hover { background: #7c74ff; }
 
@@ -383,11 +379,6 @@
               <small style="color:#38344a">Hold digit inside the box, then tap Capture</small>
             </div>
           </div>
-          <!-- Front/back camera toggle (shown only while live) -->
-          <div class="cam-source-toggle" id="cam-source-toggle" style="display:none" onclick="flipCamera()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-            <span id="cam-source-label">Flip</span>
-          </div>
           <!-- Live video -->
           <video id="camera-video" autoplay playsinline style="display:none"></video>
           <canvas id="camera-canvas"></canvas>
@@ -402,9 +393,10 @@
         </div>
         <div class="controls">
           <button id="cam-open-btn" onclick="startCamera()">Start Camera</button>
-          <button id="snap-btn" onclick="snapPhoto()">📷 Capture</button>
+          <button id="snap-btn" class="cam-live-only" onclick="snapPhoto()">📷 Capture</button>
           <button class="primary" id="cam-predict-btn" disabled>Predict →</button>
         </div>
+        <div class="cam-flip-link cam-live-only" id="cam-flip-link" onclick="flipCamera()">⇄ Switch to <span id="cam-flip-target">front</span> camera</div>
       </div>
 
       <div class="error-msg" id="error-msg"></div>
@@ -477,8 +469,8 @@
     const crosshair      = document.getElementById('crosshair');
     const cameraHint     = document.getElementById('camera-hint');
     const flashOverlay   = document.getElementById('flash-overlay');
-    const camSourceToggle= document.getElementById('cam-source-toggle');
-    const camSourceLabel = document.getElementById('cam-source-label');
+    const camSourceToggle= document.getElementById('cam-flip-link');
+    const camFlipTarget  = document.getElementById('cam-flip-target');
 
     // ── Init prob rows ───────────────────────────────────────────────────
     function initRows() {
@@ -611,10 +603,10 @@
         camStartOverlay.style.display = 'none';
         crosshair.style.display = 'block';
         cameraHint.style.display = 'block';
-        snapBtn.style.display = '';
+        snapBtn.classList.add('is-visible');
         camOpenBtn.style.display = 'none';
-        camSourceToggle.style.display = 'flex';
-        camSourceLabel.textContent = facingMode === 'environment' ? 'Back' : 'Front';
+        camSourceToggle.classList.add('is-visible');
+        camFlipTarget.textContent = facingMode === 'environment' ? 'front' : 'back';
         setStatus('active', 'Camera live — centre digit in box');
       } catch (err) {
         let msg = 'Camera access failed. Please allow camera permission and try again.';
@@ -644,9 +636,9 @@
         videoStream = null;
       }
       video.style.display = 'none';
-      snapBtn.style.display = 'none';
+      snapBtn.classList.remove('is-visible');
       camOpenBtn.style.display = '';
-      camSourceToggle.style.display = 'none';
+      camSourceToggle.classList.remove('is-visible');
       crosshair.style.display = 'none';
       cameraHint.style.display = 'none';
       camPreview.style.display = 'none';
@@ -693,8 +685,8 @@
         video.style.display = 'none';
         crosshair.style.display = 'none';
         cameraHint.style.display = 'none';
-        snapBtn.style.display = 'none';
-        camSourceToggle.style.display = 'none';
+        snapBtn.classList.remove('is-visible');
+        camSourceToggle.classList.remove('is-visible');
         camPredictBtn.disabled = false;
         setStatus('active', 'Photo captured — review, then tap Predict');
         resetResult();
@@ -707,8 +699,8 @@
       video.style.display = 'block';
       crosshair.style.display = 'block';
       cameraHint.style.display = 'block';
-      snapBtn.style.display = '';
-      camSourceToggle.style.display = 'flex';
+      snapBtn.classList.add('is-visible');
+      camSourceToggle.classList.add('is-visible');
       camPredictBtn.disabled = true;
       currentImageBlob = null;
       setStatus('active', 'Camera live — centre digit in box');
