@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = tf.keras.models.load_model("mnist_ann.keras")
+model = tf.keras.models.load_model("mnist_cnn.keras")
 
 @app.get("/")
 def root():
@@ -27,7 +27,7 @@ async def predict(file: UploadFile = File(...)):
     img = Image.open(io.BytesIO(contents)).convert("L")
     img = img.resize((28, 28))
     img_array = np.array(img) / 255.0
-    img_array = img_array.reshape(1, -1)
+    img_array = img_array.reshape(1, 28, 28, 1)
     probs = model.predict(img_array)[0].tolist()
     predicted_digit = int(np.argmax(probs))
     return {
